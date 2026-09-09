@@ -1,0 +1,23 @@
+name: Publish prepared application sources
+on:
+  push:
+    paths: ['.github/workflows/build.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Expand the reviewed source package
+        run: |
+          unzip -q source.zip -d "$RUNNER_TEMP/prepared-source"
+          cp -a "$RUNNER_TEMP/prepared-source/english-words-android/." .
+          chmod +x gradlew
+          rm source.zip
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .
+          git commit -m 'Publish Android 1.3 sources, documentation and screenshots'
+          git push origin HEAD:main
