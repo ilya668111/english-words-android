@@ -33,13 +33,18 @@ Android-приложение для детей, которые учат конк
 
 Скриншоты интерфейса версии 1.3 в мобильном предпросмотре. Озвучивание, системная отправка файлов и нативное поле рукописного ввода работают в Android-приложении.
 
-| Занятие | Выбор набора |
-|:---:|:---:|
-| <img src="docs/screenshots/home.jpg" width="285" alt="Главный экран с набором слов и выбором упражнений"> | <img src="docs/screenshots/sets-picker.jpg" width="285" alt="Лавандовое меню выбора одного или всех активных наборов"> |
-
-| Перевод слова | Копилка времени |
-|:---:|:---:|
-| <img src="docs/screenshots/translation.jpg" width="285" alt="Упражнение: выбрать русский перевод английского слова"> | <img src="docs/screenshots/wallet.jpg" width="285" alt="Копилка минут на Roblox и счётчики наград"> |
+<table>
+<tr><th>Занятие</th><th>Выбор набора</th></tr>
+<tr>
+<td valign="top"><img src="docs/screenshots/home.jpg" width="285" alt="Главный экран приложения"></td>
+<td valign="top"><img src="docs/screenshots/sets-picker.jpg" width="285" alt="Выбор одного или всех активных наборов"></td>
+</tr>
+<tr><th>Перевод слова</th><th>Копилка времени</th></tr>
+<tr>
+<td valign="top"><img src="docs/screenshots/translation.jpg" width="285" alt="Задание на перевод слова"></td>
+<td valign="top"><img src="docs/screenshots/wallet.jpg" width="285" alt="Копилка минут на Roblox"></td>
+</tr>
+</table>
 
 ## Шесть упражнений
 
