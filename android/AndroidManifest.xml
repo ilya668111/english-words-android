@@ -1,0 +1,19 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+ <uses-permission android:name="android.permission.INTERNET" />
+ <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+ <queries><intent><action android:name="android.intent.action.TTS_SERVICE" /></intent></queries>
+ <application android:label="Английские слова" android:icon="@mipmap/ic_launcher" android:theme="@style/AppTheme" android:allowBackup="false" android:supportsRtl="false" android:usesCleartextTraffic="false">
+  <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:configChanges="orientation|screenSize|keyboardHidden|uiMode" android:windowSoftInputMode="adjustResize">
+   <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+   <intent-filter>
+    <action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/>
+    <data android:scheme="content"/><data android:mimeType="application/vnd.mayusha.words+json"/><data android:mimeType="application/json"/><data android:mimeType="application/octet-stream"/>
+   </intent-filter>
+   <intent-filter>
+    <action android:name="android.intent.action.SEND"/><category android:name="android.intent.category.DEFAULT"/>
+    <data android:mimeType="application/vnd.mayusha.words+json"/><data android:mimeType="application/json"/><data android:mimeType="application/octet-stream"/>
+   </intent-filter>
+  </activity>
+  <provider android:name=".ShareProvider" android:authorities="ru.mayusha.words.files" android:exported="false" android:grantUriPermissions="true" />
+ </application>
+</manifest>

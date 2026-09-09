@@ -1,0 +1,11 @@
+{
+  "name": "mayusha-english-words",
+  "version": "1.3.0",
+  "private": true,
+  "scripts": {
+    "test": "node tests/engine.test.cjs && node tests/app.test.cjs"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0"
+  }
+}
