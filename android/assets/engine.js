@@ -3,7 +3,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
   const MODES = ['enru', 'ruen', 'gap', 'build', 'write', 'listen'];
-  const LABELS = ['Узнаю слово', 'Собираю слово', 'Пишу сама'];
+  const LABELS = ['Узнаю слово', 'Собираю слово', 'Пишу слова'];
   const uid = () => 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
   const norm = s => String(s).normalize('NFKC').toLowerCase().replace(/[’‘]/g, "'").replace(/\s+/g, ' ').trim();
   const day = (now = Date.now()) => { const d = new Date(now); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
