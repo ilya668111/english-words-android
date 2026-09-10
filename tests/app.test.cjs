@@ -129,15 +129,25 @@ async function solve(f,good=true){
   await f.setup();await f.act('choose-band','[data-band="2"]');await f.act('start-mode','[data-mode="write"]');
   const prompt=f.w.document.querySelector('.study-card .word').textContent,answer=Object.keys(pairs).find(k=>pairs[k]===prompt);
   assert.equal(f.w.document.querySelectorAll('[data-action="input-method"]').length,0);
-  await f.act('handwriting');const request=f.native.handwriting.at(-1);assert.equal(request.length,2);assert.equal(request[1],false);assert(!JSON.stringify(request).includes(answer));
+  await f.act('handwriting');const request=f.native.handwriting.at(-1);assert.equal(request.length,4);assert.equal(request[1],false);assert.equal(request[2],prompt);assert.equal(request[3],false);assert(!JSON.stringify(request).includes(answer));
   const before=JSON.stringify(f.read());f.w.WordsApp.onHandwriting(request[0],answer);assert.equal(f.w.document.querySelector('#answer').value,answer);assert.equal(JSON.stringify(f.read()),before);
   await f.act('handwriting');const latest=f.native.handwriting.at(-1);f.w.WordsApp.onHandwriting(request[0],'stale');assert.equal(f.w.document.querySelector('#answer').value,answer);
   f.w.WordsApp.onHandwriting(latest[0],'wrong');assert.equal(f.w.document.querySelector('#answer').value,'wrong');f.fill('#answer',answer);await f.act('check');assert(f.text().includes('Получилось'));
   f.w.WordsApp.onHandwriting(latest[0],'after-check');assert.equal(f.w.document.querySelector('#answer').value,answer);await f.act('next');f.w.WordsApp.onHandwriting(latest[0],'late');assert.equal(f.w.document.querySelector('#answer').value,'');
  });
  await test('single-letter handwriting and IME composition keep scoring explicit',async f=>{
-  await f.setup();await f.act('choose-band','[data-band="1"]');await f.act('start-mode','[data-mode="gap"]');await f.act('handwriting');const request=f.native.handwriting.at(-1);assert.equal(request[1],true);
+  await f.setup();await f.act('choose-band','[data-band="1"]');await f.act('start-mode','[data-mode="gap"]');await f.act('handwriting');const request=f.native.handwriting.at(-1);assert.equal(request[1],true);assert.equal(request[2],f.w.document.querySelector('.study-card .word').textContent);assert.equal(request[3],false);
   f.w.WordsApp.onHandwriting(request[0],'a');assert.equal(f.w.document.querySelector('#answer').value,'a');const before=JSON.stringify(f.read());f.w.document.querySelector('#answer').dispatchEvent(new f.w.KeyboardEvent('keydown',{key:'Enter',isComposing:true,bubbles:true}));await f.tick();assert.equal(JSON.stringify(f.read()),before);
+ });
+ await test('dictation handwriting repeats audio without exposing spelling and rejects stale audio requests',async f=>{
+  await f.setup();assert(f.text().includes('Пишу слова'));assert(!f.text().includes('Пишу сама'));
+  await f.act('choose-band','[data-band="2"]');await f.act('start-mode','[data-mode="listen"]');await f.act('handwriting');
+  const request=f.native.handwriting.at(-1);assert.equal(request[2],'');assert.equal(request[3],true);
+  const before=JSON.stringify(f.read());f.w.WordsApp.onHandwritingSpeak(request[0],false);const first=f.native.spoken.at(-1);assert(pairs[first[0]]);assert.equal(first[1],false);assert(!JSON.stringify(request).includes(first[0]));
+  f.w.WordsApp.onHandwritingSpeak(request[0],true);assert.equal(f.native.spoken.at(-1)[0],first[0]);assert.equal(f.native.spoken.at(-1)[1],true);assert.equal(JSON.stringify(f.read()),before);
+  f.w.WordsApp.onHandwriting(request[0],first[0]);await f.act('check');const count=f.native.spoken.length;
+  f.w.WordsApp.onHandwritingSpeak(request[0],false);assert.equal(f.native.spoken.length,count);
+  await f.act('next');f.w.WordsApp.onHandwritingSpeak(request[0],true);assert.equal(f.native.spoken.length,count);
  });
  console.log(`${tests} application integration tests passed (native services mocked)`);
 })().catch(e=>{console.error(e);process.exitCode=1;});
