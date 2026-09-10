@@ -28,28 +28,32 @@ import com.google.mlkit.vision.digitalink.recognition.DigitalInkRecognizerOption
 import com.google.mlkit.vision.digitalink.recognition.Ink;
 import com.google.mlkit.vision.digitalink.common.RecognitionCandidate;
 import com.google.mlkit.vision.digitalink.recognition.RecognitionContext;
-import com.google.mlkit.vision.digitalink.recognition.WritingArea;
 import java.util.ArrayList;
 import java.util.List;
 
 /** Independent finger/stylus canvas. The model receives strokes only, never the expected answer. */
 final class HandwritingDialog extends Dialog {
  interface Listener { void onText(String text); }
+ interface SpeechListener { void onSpeak(boolean slow); }
  private static final int PURPLE=0xff7952ce, INK=0xff30243e, MUTED=0xff817589;
  private final Activity activity;
  private final Listener listener;
  private final boolean singleLetter;
+ private final String prompt;
+ private final boolean dictation;
+ private final SpeechListener speech;
  private DigitalInkRecognitionModel model;
  private DigitalInkRecognizer recognizer;
  private InkView pad;
  private TextView status;
+ private TextView speechStatus;
  private Button recognize;
  private LinearLayout candidates;
  private boolean ready=false,busy=false,closed=false;
  private int revision=0;
 
- HandwritingDialog(Activity activity,boolean singleLetter,Listener listener) {
-  super(activity);this.activity=activity;this.singleLetter=singleLetter;this.listener=listener;
+ HandwritingDialog(Activity activity,boolean singleLetter,String prompt,boolean dictation,SpeechListener speech,Listener listener) {
+  super(activity);this.activity=activity;this.singleLetter=singleLetter;this.prompt=prompt;this.dictation=dictation;this.speech=speech;this.listener=listener;
  }
  private int dp(float n){return Math.round(n*activity.getResources().getDisplayMetrics().density);}
  private GradientDrawable bg(int color,int stroke){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(20));if(stroke!=0)d.setStroke(dp(1),stroke);return d;}
@@ -60,9 +64,26 @@ final class HandwritingDialog extends Dialog {
  private void add(LinearLayout parent,View v){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.topMargin=dp(9);parent.addView(v,p);}
  @Override protected void onCreate(Bundle saved) {
   super.onCreate(saved);requestWindowFeature(Window.FEATURE_NO_TITLE);
-  LinearLayout root=new LinearLayout(activity);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(20),dp(16),dp(20),dp(18));root.setBackground(bg(0xfffaf7ff,0));
-  TextView heading=text(singleLetter?"Напиши букву рукой":"Напиши слово рукой",23,INK);heading.setTypeface(null,android.graphics.Typeface.BOLD);root.addView(heading);
-  root.addView(text("Пиши пальцем или стилусом в одну строку. Клавиатура не нужна.",14,MUTED));
+  LinearLayout frame=new LinearLayout(activity);frame.setOrientation(LinearLayout.VERTICAL);frame.setPadding(dp(18),dp(12),dp(18),dp(12));frame.setBackground(bg(0xfffaf7ff,0));
+  // The question is outside the scrolling ink/results section and stays visible.
+  LinearLayout titleRow=new LinearLayout(activity);titleRow.setGravity(Gravity.CENTER_VERTICAL);
+  TextView heading=text("Пишем рукой",21,INK);heading.setTypeface(null,android.graphics.Typeface.BOLD);titleRow.addView(heading,new LinearLayout.LayoutParams(0,-2,1));
+  Button close=button("×",false,v->dismiss());close.setContentDescription("Вернуться к заданию");close.setMinWidth(0);titleRow.addView(close,new LinearLayout.LayoutParams(dp(48),dp(48)));frame.addView(titleRow);
+  LinearLayout task=new LinearLayout(activity);task.setOrientation(LinearLayout.VERTICAL);task.setPadding(dp(14),dp(6),dp(14),dp(10));task.setBackground(bg(0xffeee7fc,0));
+  task.addView(text(dictation?"Мини-диктант":singleLetter?"Вставь пропущенную букву":"Напиши по-английски",14,PURPLE));
+  if(dictation){
+   TextView instruction=text("Послушай и напиши слово",18,INK);instruction.setTypeface(null,android.graphics.Typeface.BOLD);task.addView(instruction);
+   LinearLayout audio=new LinearLayout(activity);
+   Button listen=button("Послушать",false,v->{speechStatus.setVisibility(View.GONE);speech.onSpeak(false);});
+   Button slow=button("Помедленнее",false,v->{speechStatus.setVisibility(View.GONE);speech.onSpeak(true);});
+   LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(0,-2,1);left.setMarginEnd(dp(4));audio.addView(listen,left);
+   LinearLayout.LayoutParams right=new LinearLayout.LayoutParams(0,-2,1);right.setMarginStart(dp(4));audio.addView(slow,right);task.addView(audio);
+  }else{
+   TextView question=text(prompt,prompt.length()>70?18:26,INK);question.setTypeface(null,android.graphics.Typeface.BOLD);question.setTextIsSelectable(false);task.addView(question);
+  }
+  speechStatus=text("",13,MUTED);speechStatus.setVisibility(View.GONE);speechStatus.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);task.addView(speechStatus);add(frame,task);
+  LinearLayout root=new LinearLayout(activity);root.setOrientation(LinearLayout.VERTICAL);
+  root.addView(text("Пиши пальцем или стилусом в одну строку.",14,MUTED));
   pad=new InkView();LinearLayout.LayoutParams paper=new LinearLayout.LayoutParams(-1,dp(175));paper.topMargin=dp(10);root.addView(pad,paper);
   LinearLayout actions=new LinearLayout(activity);actions.setOrientation(LinearLayout.HORIZONTAL);
   Button undo=button("↶ Убрать штрих",false,v->pad.undo()),clear=button("Очистить",false,v->pad.clear());
@@ -71,7 +92,7 @@ final class HandwritingDialog extends Dialog {
   recognize=button("Подождём…",true,v->{if(ready)recognizeInk();else download();});recognize.setEnabled(false);add(root,recognize);
   candidates=new LinearLayout(activity);candidates.setOrientation(LinearLayout.VERTICAL);add(root,candidates);
   add(root,button("Вернуться к заданию",false,v->dismiss()));
-  ScrollView scroll=new ScrollView(activity);scroll.setFillViewport(false);scroll.addView(root);scroll.setBackground(bg(0xfffaf7ff,0));setContentView(scroll);
+  ScrollView scroll=new ScrollView(activity);scroll.setFillViewport(false);scroll.addView(root);frame.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));setContentView(frame);
   Window window=getWindow();if(window!=null){window.setBackgroundDrawableResource(android.R.color.transparent);window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);}
   setOnDismissListener(d->{closed=true;revision++;if(recognizer!=null){recognizer.close();recognizer=null;}});
   try {
@@ -82,10 +103,11 @@ final class HandwritingDialog extends Dialog {
    RemoteModelManager.getInstance().isModelDownloaded(model).addOnSuccessListener(downloaded->{if(closed)return;ready=downloaded;refresh();}).addOnFailureListener(e->{if(closed)return;status.setText("Не удалось проверить модель. Попробуй скачать её ещё раз с интернетом.");recognize.setText("Скачать модель");recognize.setEnabled(true);});
   }catch(Exception e){status.setText("Рукописное распознавание сейчас недоступно. Можно вернуться и ввести ответ с клавиатуры.");recognize.setVisibility(View.GONE);}
  }
- @Override protected void onStart(){super.onStart();Window w=getWindow();if(w!=null){int width=Math.min(activity.getResources().getDisplayMetrics().widthPixels-dp(24),dp(500));w.setLayout(width,-2);w.setGravity(Gravity.CENTER);}}
+ @Override protected void onStart(){super.onStart();Window w=getWindow();if(w!=null){int width=Math.min(activity.getResources().getDisplayMetrics().widthPixels-dp(24),dp(500));int height=dp(activity.getResources().getConfiguration().screenHeightDp*.92f);w.setLayout(width,height);w.setGravity(Gravity.CENTER);}}
+ void showSpeechError(String message){if(closed||speechStatus==null)return;speechStatus.setText(message);speechStatus.setVisibility(View.VISIBLE);}
  private void refresh(){
   if(closed)return;recognize.setEnabled(!busy);recognize.setText(ready?"Распознать":"Скачать модель · около 20 МБ");
-  status.setText(ready?"После распознавания выбери свой вариант. Ответ проверяется только в задании.":"Один раз скачай английскую модель. Потом можно писать без интернета; Gboard менять не нужно.");
+  status.setText(ready?"Распознай написанное и выбери свой вариант.":"Скачай модель один раз — затем можно писать без интернета.");
  }
  private void download(){
   if(busy||model==null)return;busy=true;recognize.setEnabled(false);status.setText("Скачиваем английскую модель… Нужен интернет. Это окно можно закрыть, загрузка продолжится.");
@@ -94,9 +116,11 @@ final class HandwritingDialog extends Dialog {
  private void edited(){revision++;candidates.removeAllViews();if(ready&&!busy)refresh();}
  private void recognizeInk(){
   if(busy||!ready||recognizer==null)return;if(pad.strokes.isEmpty()||pad.activePointer!=-1){status.setText("Сначала напиши "+(singleLetter?"букву":"слово")+" в поле и подними палец или стилус.");return;}
-  final int requested=revision;Ink.Builder ink=Ink.builder();for(List<float[]> stroke:pad.strokes){Ink.Stroke.Builder b=Ink.Stroke.builder();for(float[] point:stroke)b.addPoint(Ink.Point.create(point[0],point[1],(long)point[2]));ink.addStroke(b.build());}
+  final int requested=revision;
+  try {
+  Ink.Builder ink=Ink.builder();for(List<float[]> stroke:pad.strokes){Ink.Stroke.Builder b=Ink.Stroke.builder();for(float[] point:stroke)b.addPoint(Ink.Point.create(point[0],point[1],(long)point[2]));ink.addStroke(b.build());}
   busy=true;recognize.setEnabled(false);candidates.removeAllViews();status.setText("Распознаём почерк…");
-  RecognitionContext context=RecognitionContext.builder().setWritingArea(new WritingArea(pad.getWidth(),pad.getHeight())).build();
+  RecognitionContext context=HandwritingContext.forAnswer(pad.getWidth(),pad.getHeight());
   recognizer.recognize(ink.build(),context).addOnSuccessListener(result->{
    if(closed)return;busy=false;recognize.setEnabled(true);if(requested!=revision){refresh();return;}
    ArrayList<String> seen=new ArrayList<>();
@@ -105,7 +129,13 @@ final class HandwritingDialog extends Dialog {
     add(candidates,button(value+"  →",false,v->{if(requested!=revision||closed)return;listener.onText(value);dismiss();}));if(seen.size()>=3)break;
    }
    status.setText(seen.isEmpty()?"Не удалось прочитать "+(singleLetter?"букву":"слово")+". Попробуй написать чуть крупнее и разборчивее.":"Выбери написанный вариант. Если он неверный — исправь штрихи или очисти поле.");
-  }).addOnFailureListener(e->{if(closed)return;busy=false;recognize.setEnabled(true);status.setText("Не удалось распознать почерк. Попробуй ещё раз или введи ответ с клавиатуры.");});
+  }).addOnFailureListener(this::recognitionFailed);
+  }catch(RuntimeException|LinkageError e){recognitionFailed(e);}
+ }
+ private void recognitionFailed(Throwable error){
+  android.util.Log.e("WordsHandwriting","Recognition failed",error);
+  if(closed)return;busy=false;recognize.setEnabled(true);
+  status.setText("Не удалось распознать почерк. Написанное сохранено — попробуй ещё раз или вернись к заданию.");
  }
  private final class InkView extends View {
   private final List<List<float[]>> strokes=new ArrayList<>();

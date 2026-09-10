@@ -74,7 +74,7 @@ public final class MainActivity extends Activity {
  }
  private void js(String code){runOnUiThread(()->{if(web!=null&&!isFinishing()&&!isDestroyed()&&pageReady)web.evaluateJavascript(code,null);});}
  private void notifyUser(String message){js("window.WordsApp.notify("+JSONObject.quote(message)+")");}
- private void speechError(String message){js("window.WordsApp.onSpeechError("+JSONObject.quote(message)+")");}
+ private void speechError(String message){runOnUiThread(()->{if(handwriting!=null&&handwriting.isShowing())handwriting.showSpeechError(message);});js("window.WordsApp.onSpeechError("+JSONObject.quote(message)+")");}
  private void initTts(){
   if(tts!=null){tts.stop();tts.shutdown();}ttsReady=false;
   tts=new TextToSpeech(this,status->{ttsReady=status==TextToSpeech.SUCCESS;if(ttsReady){tts.setOnUtteranceProgressListener(new UtteranceProgressListener(){public void onStart(String id){}public void onDone(String id){}public void onError(String id){speechError("Не удалось озвучить слово. Проверь английский голос в настройках.");}});}reportVoice();});
@@ -120,11 +120,11 @@ public final class MainActivity extends Activity {
  }
  private String hash(String pin,String salt) throws Exception {PBEKeySpec spec=new PBEKeySpec(pin.toCharArray(),Base64.decode(salt,Base64.NO_WRAP),120000,256);try{return Base64.encodeToString(SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).getEncoded(),Base64.NO_WRAP);}finally{spec.clearPassword();}}
  public final class Bridge {
-  @JavascriptInterface public void openHandwriting(String request,boolean singleLetter){
-   if(request==null||!request.matches("[0-9]{1,12}"))return;
+  @JavascriptInterface public void openHandwriting(String request,boolean singleLetter,String prompt,boolean dictation){
+   if(request==null||!request.matches("[0-9]{1,12}")||prompt==null||prompt.length()>2000)return;
    runOnUiThread(()->{if(isFinishing()||isDestroyed())return;if(handwriting!=null&&handwriting.isShowing())handwriting.dismiss();
     ((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(web.getWindowToken(),0);
-    handwriting=new HandwritingDialog(MainActivity.this,singleLetter,text->js("window.WordsApp.onHandwriting("+JSONObject.quote(request)+","+JSONObject.quote(text)+")"));handwriting.show();
+    handwriting=new HandwritingDialog(MainActivity.this,singleLetter,prompt,dictation,slow->js("window.WordsApp.onHandwritingSpeak("+JSONObject.quote(request)+","+slow+")"),text->js("window.WordsApp.onHandwriting("+JSONObject.quote(request)+","+JSONObject.quote(text)+")"));handwriting.show();
    });
   }
   @JavascriptInterface public String loadState(){synchronized(stateLock){try{return new String(readLimited(stateFile.openRead()),StandardCharsets.UTF_8);}catch(FileNotFoundException e){return "";}catch(Exception e){return "{\"error\":\"Не удалось прочитать сохранение\"}";}}}
