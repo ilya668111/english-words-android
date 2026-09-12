@@ -1,4 +1,5 @@
 #!/bin/sh
+# Запуск закреплённой версии Gradle в Linux и macOS.
 
 #
 # Copyright © 2015-2021 the original authors.
