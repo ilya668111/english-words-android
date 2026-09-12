@@ -186,7 +186,7 @@
     const voices=speechSynthesis.getVoices(),lang=accent||state.settings.accent;
     const voice=voices.find(v=>v.lang===lang&&v.localService)||voices.find(v=>v.lang.startsWith('en')&&v.localService);
     if(!voice){toast('В этом просмотре нет английского голоса. На телефоне проверим голос Android.');return;}
-    speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.voice=voice;u.lang=voice.lang;u.rate=slow?.7:.9;speechSynthesis.speak(u);
+    speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.voice=voice;u.lang=voice.lang;u.rate=slow?.45:.9;speechSynthesis.speak(u);
   }
   function stopAudio(){if(A)A.stopSpeech();else if('speechSynthesis'in window)speechSynthesis.cancel();}
   async function action(a,el) {
@@ -269,7 +269,7 @@
   });
   $('#file').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;if(f.size>5*1024*1024){toast('Файл слишком большой.');return;}receiveFile(await f.text());});
   function back(){if($('#overlay').children.length){closeModal();return true;}if(screen==='train'||screen==='cards'&&session){action('exit-session').catch(err);return true;}if(screen==='editor'){action('editor-back').catch(err);return true;}if(screen!=='home'){openScreen('home');return true;}return false;}
-  window.WordsApp={onHandwritingSpeak:(request,slow)=>{if(String(handwritingRequest)!==request||screen!=='train'||answered||q?.mode!=='listen')return;speak(q.word.en,slow===true);},onHandwriting:(request,text)=>{if(String(handwritingRequest)!==request||screen!=='train'||answered||!$('#answer')||typeof text!=='string')return;$('#answer').value=text.slice(0,q.mode==='gap'?1:80);$('#answer').scrollIntoView({block:'center',behavior:'smooth'});toast('Проверь распознанное слово, затем нажми «Проверить».');},back,receiveFile,notify:toast,pause:()=>{stopAudio();lockParent();},onVoiceStatus:(ready,message)=>{audioStatus={ready,message};const v=$('#voice-status');if(v)v.textContent=message;},onSpeechError:message=>{toast(message);if($('#audio-note'))$('#audio-note').textContent=message;}};
+  window.WordsApp={onHandwritingSpeak:(request,slow)=>{if(String(handwritingRequest)!==request||screen!=='train'||answered||q?.mode!=='listen')return;speak(q.word.en,slow===true);},onHandwriting:(request,text)=>{if(String(handwritingRequest)!==request||screen!=='train'||answered||!$('#answer')||typeof text!=='string')return;$('#answer').value=text.slice(0,q.mode==='gap'?1:80);$('#answer').scrollIntoView({block:'center',behavior:'smooth'});},back,receiveFile,notify:toast,pause:()=>{stopAudio();lockParent();},onVoiceStatus:(ready,message)=>{audioStatus={ready,message};const v=$('#voice-status');if(v)v.textContent=message;},onSpeechError:message=>{toast(message);if($('#audio-note'))$('#audio-note').textContent=message;}};
   try {const raw=A?A.loadState():localStorage.getItem('mayusha-words-v1');state=raw?E.validateState(JSON.parse(raw)):E.initial();render();if(A){A.ready();A.checkVoice(state.settings.accent);} }
   catch(e){fatal=true;root.innerHTML=`<section class="card mt"><h2>Не удалось открыть сохранённые данные</h2><p class="note">Данные не перезаписаны. Закрой и снова открой приложение. Если ошибка повторится, сохрани сообщение и обратись к взрослому.</p><p class="error">${esc(e.message)}</p></section>`;}
 })();
