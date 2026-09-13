@@ -46,6 +46,13 @@ Android-приложение для детей, которые учат конк
 </tr>
 </table>
 
+### Рукописный ввод и распознавание
+
+Скриншот с Samsung Galaxy S24 Ultra: задание остаётся сверху, слово написано от руки, а под полем показаны варианты распознавания. После выбора варианта ответ можно проверить в задании.
+
+<a href="docs/screenshots/handwriting-recognition.jpg"><img src="docs/screenshots/handwriting-recognition.jpg" width="320" alt="Рукописное слово forty-nine и варианты его распознавания на Samsung Galaxy S24 Ultra"></a>
+
+
 ## Шесть упражнений
 
 | Раздел | Упражнение | Что делает ребёнок |
