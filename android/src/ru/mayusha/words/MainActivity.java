@@ -33,8 +33,11 @@ import javax.crypto.spec.PBEKeySpec;
 
 public final class MainActivity extends Activity {
  private static final String HOST="words.mayusha.local";
- private static final int MAX_FILE=5*1024*1024, OPEN_FILE=10, SAVE_BACKUP=11;
+ private static final int MAX_FILE=5*1024*1024, OPEN_FILE=10, SAVE_BACKUP=11, SCAN_PHOTO=12;
  private WebView web;
+ private com.google.mlkit.nl.translate.Translator translator;
+ private int translationGeneration=0;
+ private String photoRequest="";
  private HandwritingDialog handwriting;
  private TextToSpeech tts;
  private boolean pageReady=false,ttsReady=false,refreshVoice=false;
@@ -108,6 +111,7 @@ public final class MainActivity extends Activity {
  @Override protected void onNewIntent(Intent i){super.onNewIntent(i);setIntent(i);handleIntent(i);}
  @Override protected void onActivityResult(int request,int result,Intent data){
   super.onActivityResult(request,result,data);
+  if(request==SCAN_PHOTO){String text=result==RESULT_OK&&data!=null?data.getStringExtra("text"):"";js("window.WordsApp.onPhoto("+JSONObject.quote(photoRequest)+","+JSONObject.quote(text==null?"":text)+",null)");photoRequest="";}
   if(request==OPEN_FILE&&result==RESULT_OK&&data!=null&&data.getData()!=null)readImport(data.getData());
   if(request==SAVE_BACKUP){final File pending=new File(getFilesDir(),"pending-backup.json");if(result==RESULT_OK&&data!=null&&data.getData()!=null){final Uri uri=data.getData();new Thread(()->{try{byte[] content=readLimited(new FileInputStream(pending));try(OutputStream out=getContentResolver().openOutputStream(uri,"wt")){if(out==null)throw new IOException();out.write(content);}notifyUser("Резервная копия сохранена.");}catch(Exception e){notifyUser("Не удалось сохранить копию. Попробуй другую папку.");}finally{pending.delete();}},"backup-save").start();}else pending.delete();exportBackup=null;}
  }
@@ -119,7 +123,25 @@ public final class MainActivity extends Activity {
   }catch(Exception e){notifyUser("Не удалось открыть отправку файла. Попробуй ещё раз.");}
  }
  private String hash(String pin,String salt) throws Exception {PBEKeySpec spec=new PBEKeySpec(pin.toCharArray(),Base64.decode(salt,Base64.NO_WRAP),120000,256);try{return Base64.encodeToString(SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).getEncoded(),Base64.NO_WRAP);}finally{spec.clearPassword();}}
+ private void translateNext(String request,org.json.JSONArray words,int index,int generation){
+  if(generation!=translationGeneration||isFinishing()||isDestroyed())return;
+  if(index>=words.length()){js("window.WordsApp.onTranslation("+JSONObject.quote(request)+",-1,\"\",\"\",true)");return;}
+  String word=words.optString(index);
+  translator.translate(word).addOnSuccessListener(value->{if(generation!=translationGeneration)return;js("window.WordsApp.onTranslation("+JSONObject.quote(request)+","+index+","+JSONObject.quote(word)+","+JSONObject.quote(value)+",false)");translateNext(request,words,index+1,generation);}).addOnFailureListener(e->{if(generation==translationGeneration){js("window.WordsApp.onTranslation("+JSONObject.quote(request)+",-1,\"\",\"Не удалось перевести слова. Можно повторить или вписать перевод вручную.\",true)");}});
+ }
  public final class Bridge {
+  @JavascriptInterface public void translatePhoto(String request,String json){
+   if(request==null||!request.matches("[0-9]{1,12}")||json==null||json.length()>10000)return;
+   try{org.json.JSONArray words=new org.json.JSONArray(json);if(words.length()>100)return;for(int i=0;i<words.length();i++)if(!words.getString(i).matches("[a-zA-Z '\u2019-]{1,60}"))return;
+    runOnUiThread(()->{if(isFinishing()||isDestroyed())return;final int generation=++translationGeneration;
+     if(translator==null)translator=com.google.mlkit.nl.translate.Translation.getClient(new com.google.mlkit.nl.translate.TranslatorOptions.Builder().setSourceLanguage(com.google.mlkit.nl.translate.TranslateLanguage.ENGLISH).setTargetLanguage(com.google.mlkit.nl.translate.TranslateLanguage.RUSSIAN).build());
+     translator.downloadModelIfNeeded(new com.google.mlkit.common.model.DownloadConditions.Builder().build()).addOnSuccessListener(v->translateNext(request,words,0,generation)).addOnFailureListener(e->{if(generation==translationGeneration)js("window.WordsApp.onTranslation("+JSONObject.quote(request)+",-1,\"\",\"Не удалось загрузить переводчик. Проверь интернет и повтори. Переводы можно вписать вручную.\",true)");});
+    });
+   }catch(Exception ignored){}
+  }
+
+  @JavascriptInterface public void scanPhoto(String request){if(request==null||!request.matches("[0-9]{1,12}"))return;runOnUiThread(()->{photoRequest=request;startActivityForResult(new Intent(MainActivity.this,PhotoScanActivity.class),SCAN_PHOTO);});}
+
   @JavascriptInterface public void openHandwriting(String request,boolean singleLetter,String prompt,boolean dictation){
    if(request==null||!request.matches("[0-9]{1,12}")||prompt==null||prompt.length()>2000)return;
    runOnUiThread(()->{if(isFinishing()||isDestroyed())return;if(handwriting!=null&&handwriting.isShowing())handwriting.dismiss();
@@ -165,5 +187,5 @@ public final class MainActivity extends Activity {
  @Override protected void onPause(){parentUntil=0;if(web!=null){js("window.WordsApp.pause()");web.onPause();}if(tts!=null)tts.stop();super.onPause();}
  @Override protected void onResume(){super.onResume();if(web!=null)web.onResume();if(refreshVoice){refreshVoice=false;initTts();}else if(tts!=null&&ttsReady)reportVoice();}
  @Override protected void onSaveInstanceState(Bundle out){super.onSaveInstanceState(out);/* Large file content stays out of the Binder bundle. */}
- @Override protected void onDestroy(){if(handwriting!=null)handwriting.dismiss();if(tts!=null){tts.stop();tts.shutdown();tts=null;}if(web!=null){web.removeJavascriptInterface("WordsAndroid");web.destroy();web=null;}super.onDestroy();}
+ @Override protected void onDestroy(){translationGeneration++;if(translator!=null){translator.close();translator=null;}if(handwriting!=null)handwriting.dismiss();if(tts!=null){tts.stop();tts.shutdown();tts=null;}if(web!=null){web.removeJavascriptInterface("WordsAndroid");web.destroy();web=null;}super.onDestroy();}
 }
