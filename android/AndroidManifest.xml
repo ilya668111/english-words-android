@@ -14,6 +14,8 @@
     <data android:mimeType="application/vnd.mayusha.words+json"/><data android:mimeType="application/json"/><data android:mimeType="application/octet-stream"/>
    </intent-filter>
   </activity>
+  <activity android:name=".PhotoScanActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden|uiMode" />
+  <provider android:name=".PhotoProvider" android:authorities="ru.mayusha.words.photos" android:exported="false" android:grantUriPermissions="true" />
   <provider android:name=".ShareProvider" android:authorities="ru.mayusha.words.files" android:exported="false" android:grantUriPermissions="true" />
  </application>
 </manifest>
