@@ -8,7 +8,7 @@ async function fixture(initial=null){
  const dom=new JSDOM(fs.readFileSync(assets+'/index.html','utf8'),{url:'https://words.mayusha.local/',runScripts:'outside-only',pretendToBeVisual:true});
  const w=dom.window;w.scrollTo=()=>{};w.HTMLElement.prototype.scrollIntoView=()=>{};
  const native={saved:initial?JSON.stringify(initial):'',pin:'',exports:[],shares:[],spoken:[],handwriting:[],fail:false,saveCalls:0};
- w.WordsAndroid={openHandwriting:(...a)=>native.handwriting.push(a),loadState:()=>native.saved,saveState:text=>{native.saveCalls++;if(native.fail)return false;native.saved=text;return true;},hasPin:()=>!!native.pin,setPin:p=>{native.pin=p;return true;},verifyPin:p=>p===native.pin?'ok':'Неверный PIN. Попробуйте ещё раз.',lockParent:()=>{},ready:()=>{},checkVoice:()=>{},speak:(...a)=>native.spoken.push(a),stopSpeech:()=>{},openSpeechSettings:()=>{},pickFile:()=>{},exportFile:(...a)=>native.exports.push(a),shareText:t=>native.shares.push(t)};
+ w.WordsAndroid={translatePhoto:(...args)=>native.translation=args,scanPhoto:r=>native.photo=r,openHandwriting:(...a)=>native.handwriting.push(a),loadState:()=>native.saved,saveState:text=>{native.saveCalls++;if(native.fail)return false;native.saved=text;return true;},hasPin:()=>!!native.pin,setPin:p=>{native.pin=p;return true;},verifyPin:p=>p===native.pin?'ok':'Неверный PIN. Попробуйте ещё раз.',lockParent:()=>{},ready:()=>{},checkVoice:()=>{},speak:(...a)=>native.spoken.push(a),stopSpeech:()=>{},openSpeechSettings:()=>{},pickFile:()=>{},exportFile:(...a)=>native.exports.push(a),shareText:t=>native.shares.push(t)};
  w.eval(fs.readFileSync(assets+'/engine.js','utf8'));w.eval(fs.readFileSync(assets+'/app.js','utf8'));
  const tick=()=>new Promise(r=>setTimeout(r,0));
  async function click(selector){const e=w.document.querySelector(selector);assert(e,'Missing '+selector+' on '+w.document.body.textContent.slice(0,200));assert(!e.disabled,'Disabled '+selector);e.click();await tick();}
@@ -32,6 +32,29 @@ async function solve(f,good=true){
  await f.act('check');
 }
 (async()=>{
+ await test('Перевод заполняет пустые поля, сохраняет ручные исправления и отклоняет устаревшие ответы',async f=>{
+  await f.setup();await f.act('sets');await f.act('photo-new');assert(!f.w.document.querySelector('#pin'));await f.act('modal-ok');
+  f.w.WordsApp.onPhoto(f.native.photo,'car\npark\nshark',null);await f.tick();const request=f.native.translation[0];
+  f.w.WordsApp.onTranslation(request,0,'Car','машина',false);assert.equal(f.w.document.querySelector('#photo-ru-0').value,'Машина');
+  f.fill('#photo-ru-1','Парк');f.w.WordsApp.onTranslation(request,1,'Park','парковать',false);assert.equal(f.w.document.querySelector('#photo-ru-1').value,'Парк');
+  f.fill('#photo-en-2','Star');f.w.WordsApp.onTranslation(request,2,'Shark','акула',false);assert.equal(f.w.document.querySelector('#photo-ru-2').value,'');
+  f.w.WordsApp.onTranslation(request,-1,'','',true);assert(f.text().includes('Переводы предложены'));
+  await f.act('photo-cancel');f.w.WordsApp.onTranslation(request,0,'Car','автомобиль',false);assert.equal(f.read().decks.length,1);
+ });
+ await test('Фото не требует PIN, позволяет исправить список и сохраняет только подтверждённый набор',async f=>{
+  await f.setup();await f.act('sets');await f.act('photo-new');assert(!f.w.document.querySelector('#pin'));await f.act('modal-ok');
+  assert(f.native.photo);f.w.WordsApp.pause();f.w.WordsApp.onPhoto(f.native.photo,'slow\nfast',null);await f.tick();
+  assert(!f.w.document.querySelector('#pin'));assert(f.text().includes('Проверим список'));
+  await f.act('photo-accept');assert.equal(f.read().decks.length,1);
+  f.fill('#photo-title','Фото урока');f.fill('#photo-ru-0','медленный');f.fill('#photo-ru-1','быстрый');await f.act('photo-accept');
+  assert.equal(f.read().decks.length,1);await f.act('save-deck');await f.act('modal-ok');assert.equal(f.read().decks.length,2);assert.equal(f.read().decks[1].words[0].en,'Slow');
+  await f.act('home');await f.act('album');assert(f.text().includes('Первое приключение'));
+ });
+ await test('Удаление из меню: отмена безопасна, активный и архивный наборы удаляются без потери минут',async f=>{
+  await f.setup();const id=f.read().decks[0].id;await f.act('sets');await f.act('deck-menu',`[data-id="${id}"]`);await f.act('menu-delete');await f.act('modal-close');assert.equal(f.read().decks.length,1);
+  await f.act('deck-menu',`[data-id="${id}"]`);await f.act('menu-archive');assert(f.read().decks[0].archived);
+  await f.act('deck-menu',`[data-id="${id}"]`);await f.act('menu-delete');assert(!f.w.document.querySelector('#pin'));await f.act('modal-ok');assert.equal(f.read().decks.length,0);assert.equal(f.read().wallet.balance,0);assert.equal(f.read().active,'');await f.act('home');assert(f.text().includes('Ждём первые слова'));
+ });
  await test('first run, parent PIN, settings persistence and no old brand labels',async f=>{
   await f.setup();assert(f.text().includes('Английские слова'));assert(!f.text().includes('Likee'));
   await f.act('parent');f.fill('#pin','1111');await f.act('modal-ok');assert(f.text().includes('Неверный PIN'));f.fill('#pin','2468');await f.act('modal-ok');
@@ -91,13 +114,13 @@ async function solve(f,good=true){
  });
  await test('parent menu asks for PIN on every entry, even immediately after a successful entry',async f=>{
   await f.setup();await f.parent();await f.act('parent');assert(f.w.document.querySelector('#pin'));await f.act('modal-close');await f.act('home');await f.act('parent');assert(f.w.document.querySelector('#pin'));
-  f.fill('#pin','2468');await f.act('modal-ok');await f.act('settings');await f.act('parent');assert(f.w.document.querySelector('#pin'));f.fill('#pin','2468');await f.act('modal-ok');await f.act('sets');await f.act('new-deck');assert(f.w.document.querySelector('#pin'));
+  f.fill('#pin','2468');await f.act('modal-ok');await f.act('settings');await f.act('parent');assert(f.w.document.querySelector('#pin'));f.fill('#pin','2468');await f.act('modal-ok');await f.act('sets');await f.act('new-deck');assert(!f.w.document.querySelector('#pin'));assert(f.w.document.querySelector('#deck-title'));
  });
  await test('pack quick menu targets the right pack for share, edit and archive',async f=>{
   await f.setup();const received={id:'pets',title:'Животные',words:[{id:'cat',en:'cat',ru:['кошка']},{id:'dog',en:'dog',ru:['собака']}]};f.w.WordsApp.receiveFile(E.exportDeck(received));await f.act('accept-import');await f.act('sets');
   await f.act('quick-share','[data-id="pets"]');assert.equal(E.decode(f.native.exports.at(-1)[0]).deck.id,'pets');
-  await f.act('deck-menu','[data-id="pets"]');await f.act('menu-edit');assert(f.w.document.querySelector('#pin'));f.fill('#pin','2468');await f.act('modal-ok');assert.equal(f.w.document.querySelector('#deck-title').value,'Животные');
-  await f.act('editor-back');await f.act('modal-ok');await f.act('sets');await f.act('deck-menu','[data-id="pets"]');await f.act('menu-archive');f.fill('#pin','2468');await f.act('modal-ok');assert.equal(f.read().decks.find(d=>d.id==='pets').archived,true);assert.equal(f.read().decks[0].archived,false);
+  await f.act('deck-menu','[data-id="pets"]');await f.act('menu-edit');assert(!f.w.document.querySelector('#pin'));assert.equal(f.w.document.querySelector('#deck-title').value,'Животные');
+  await f.act('editor-back');await f.act('modal-ok');await f.act('sets');await f.act('deck-menu','[data-id="pets"]');await f.act('menu-archive');assert.equal(f.read().decks.find(d=>d.id==='pets').archived,true);assert.equal(f.read().decks[0].archived,false);
  });
  await test('home picker persists one-pack and all-active choices and cards respect the scope',async f=>{
   await f.setup();const received={id:'pets',title:'Животные',words:[{id:'cat',en:'cat',ru:['кошка']},{id:'dog',en:'dog',ru:['собака']}]};f.w.WordsApp.receiveFile(E.exportDeck(received));await f.act('accept-import');await f.act('home');
