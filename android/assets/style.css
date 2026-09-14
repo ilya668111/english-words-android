@@ -27,3 +27,5 @@
 .scope-all .scope-icon{background:#e5d8fb}.scope-group{font-size:11px;margin:8px 3px 0}
 .scope-dialog{padding:25px 22px}.scope-dialog h2{font-size:24px;line-height:1.25}
 button:focus-visible{outline:3px solid #b69cde;outline-offset:3px}
+
+.sticker-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.sticker{text-align:center;padding:20px 14px;overflow-wrap:anywhere}.sticker-art{font-size:64px;margin:8px 0 18px}.sticker.unlocked{background:linear-gradient(145deg,#eee4ff,#fff4f9);border-color:#c2a6ed}.sticker.locked{background:#f7f4fa}.sticker h3{font-size:18px}.photo-row input[type=checkbox]{width:24px;height:24px;vertical-align:middle;accent-color:#7952cf}.sticker .note{font-size:14px}@media(max-width:340px){.sticker-grid{grid-template-columns:1fr}}

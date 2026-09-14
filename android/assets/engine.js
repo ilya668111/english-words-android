@@ -42,9 +42,37 @@
       return {id:prior?.id||uid(),en,ru};
     });
   }
+  const STICKERS=[
+    {id:'bunny',icon:'🐰',title:'Первое приключение',rule:'Заверши занятие из 10 заданий',kind:'sessions',goal:1},
+    {id:'book',icon:'📖',title:'Книжка открытий',rule:'Выучи перевод 10 слов',kind:'translation',goal:10},
+    {id:'fox',icon:'🦊',title:'Ловкое перо',rule:'Освой написание 5 слов',kind:'spelling',goal:5},
+    {id:'star',icon:'🌟',title:'Три встречи',rule:'Заверши занятия в 3 разных дня',kind:'days',goal:3},
+    {id:'owl',icon:'🦉',title:'Мудрая сова',rule:'Выучи перевод и написание целого набора',kind:'decks',goal:1},
+    {id:'cat',icon:'🐱',title:'Любопытный кот',rule:'Заверши 10 занятий',kind:'sessions',goal:10},
+    {id:'rainbow',icon:'🌈',title:'Радуга знаний',rule:'Заверши занятия в 7 разных дней',kind:'days',goal:7},
+    {id:'crown',icon:'👑',title:'Коллекция слов',rule:'Выучи перевод 50 слов',kind:'translation',goal:50}
+  ];
+  function stickerProgress(s){
+    const complete=s.sessions.filter(x=>x.total>=10),t=new Set(),w=new Set();let decks=0;
+    s.decks.forEach(d=>{let full=true;d.words.forEach(word=>{const p=stat(s,d,word);if(mastered(p.t))t.add(norm(word.en));if(mastered(p.s))w.add(norm(word.en));if(!mastered(p.t)||!mastered(p.s))full=false;});if(full&&d.words.length)decks++;});
+    return {sessions:complete.length,days:new Set(complete.map(x=>day(x.at))).size,translation:t.size,spelling:w.size,decks};
+  }
+  function unlockStickers(s,now=Date.now()){
+    s.stickers=s.stickers||{};const progress=stickerProgress(s),added=[];
+    STICKERS.forEach(x=>{if(!Object.hasOwn(s.stickers,x.id)&&progress[x.kind]>=x.goal){s.stickers[x.id]=now;added.push(x.id);}});return added;
+  }
+  function photoWords(text){
+    need(typeof text==='string'&&text.length<=30000,'На фото слишком много текста. Сфотографируйте только список слов.');
+    const seen=new Set(),result=[];
+    text.split(/\r?\n/).forEach(line=>{
+      let en=line.trim().replace(/^[\d\s.)•*–—-]+/,'').split(/\s+[—–]\s*|\t/)[0].trim();
+      en=en.replace(/[.,:;!?]+$/,'').replace(/’/g,"'").replace(/\s+/g,' ');
+      if(/^[A-Za-z][A-Za-z '\-]{0,59}$/.test(en)&&!seen.has(norm(en))){seen.add(norm(en));result.push(capital(en));}
+    });need(result.length<=100,'Найдено больше 100 строк. Сфотографируйте меньшую часть списка.');return result;
+  }
   function initial() {
     const raw={id:'sample-opposites-v1',title:'Слова и противоположности',due:'',words:[['slow','медленный'],['fast','быстрый'],['low','низкий'],['high','высокий'],['old','старый'],['young','молодой'],['big','большой'],['small','маленький'],['long','длинный'],['short','короткий'],['hot','горячий'],['cold','холодный']].map((a,i)=>({id:'sample'+i,en:a[0],ru:[a[1]]}))};
-    return {version:1,profile:{name:'Майюша',genitive:'Майюши',ready:false},settings:{rewards:[5,7,10],dailyCap:30,accent:'en-GB'},decks:[cleanDeck(raw)],active:raw.id,progress:{},wallet:{balance:0,counts:[0,0,0],history:[],daily:{}},credits:{},sessions:[]};
+    return {version:1,profile:{name:'Майюша',genitive:'Майюши',ready:false},settings:{rewards:[5,7,10],dailyCap:30,accent:'en-GB'},decks:[cleanDeck(raw)],active:raw.id,progress:{},wallet:{balance:0,counts:[0,0,0],history:[],daily:{}},credits:{},sessions:[],stickers:{}};
   }
   function stat(s,d,w) { return s.progress[key(d,w)] || {seen:false,t:{ok:0,wrong:0,days:[],streak:0,due:0},s:{ok:0,wrong:0,days:[],streak:0,due:0},last:0}; }
   const mastered = p => p.streak>=2 && p.days.length>=2;
@@ -79,7 +107,9 @@
     let balance=0;const ids=new Set();const history=a.history.map(h=>{need(h&&typeof h.id==='string'&&/^[a-zA-Z0-9_-]{1,80}$/.test(h.id)&&!ids.has(h.id)&&integer(h.at,0,9e15)&&integer(h.delta,-1e7,1e7)&&typeof h.label==='string'&&h.label.length<=200&&['earn','spend','adjust'].includes(h.type),'Повреждена история копилки.');ids.add(h.id);balance+=h.delta;need(balance>=0&&balance<=1e7,'Неверный баланс в истории.');need(h.type!=='spend'||h.delta<0,'Неверное списание.');need(h.type!=='earn'||h.delta>=0,'Неверная награда.');return {id:h.id,at:h.at,delta:h.delta,type:h.type,label:h.label};});need(balance===a.balance,'Баланс не совпадает с историей.');
     const daily={};need(a.daily&&typeof a.daily==='object'&&!Array.isArray(a.daily),'Неверный дневной счётчик.');Object.entries(a.daily).forEach(([k,v])=>{need(validDate(k)&&integer(v,0,1e7),'Неверная дневная награда.');daily[k]=v;});out.wallet={balance,counts:a.counts.slice(),history,daily};
     out.credits={};need(s.credits&&typeof s.credits==='object'&&!Array.isArray(s.credits),'Неверный счётчик ответов.');Object.entries(s.credits).forEach(([k,v])=>{need(k.length<=100&&/^.+\|[012]$/.test(k)&&validDate(v),'Неверный счётчик слов.');out.credits[k]=v;});
-    need(Array.isArray(s.sessions)&&s.sessions.length<=2000,'Неверная история занятий.');out.sessions=s.sessions.map(r=>{need(r&&integer(r.at,0,9e15)&&integer(r.total,0,100)&&integer(r.correct,0,r.total)&&typeof r.title==='string'&&r.title.length<=100,'Повреждена история занятий.');return {at:r.at,total:r.total,correct:r.correct,title:r.title};});return out;
+    need(Array.isArray(s.sessions)&&s.sessions.length<=2000,'Неверная история занятий.');out.sessions=s.sessions.map(r=>{need(r&&integer(r.at,0,9e15)&&integer(r.total,0,100)&&integer(r.correct,0,r.total)&&typeof r.title==='string'&&r.title.length<=100,'Повреждена история занятий.');return {at:r.at,total:r.total,correct:r.correct,title:r.title};});
+    if(s.stickers!==undefined){need(s.stickers&&typeof s.stickers==='object'&&!Array.isArray(s.stickers),'Повреждён альбом.');Object.entries(s.stickers).forEach(([id,at])=>{need(STICKERS.some(x=>x.id===id)&&integer(at,0,9e15),'Повреждена наклейка.');out.stickers[id]=at;});}
+    return out;
   }
   function markSeen(s,d,w) {const p=stat(s,d,w);p.seen=true;s.progress[key(d,w)]=p;}
   function reward(s,w,mode,now) {
@@ -147,5 +177,5 @@
   function check(q,value) {return ['enru','ruen'].includes(q.mode)?value===q.word.id:norm(value)===norm(q.mode==='gap'?q.answer:q.word.en);}
   function studyDecks(s,id) {return id==='__all__'?s.decks.filter(d=>!d.archived):s.decks.filter(d=>d.id===id);}
   function preferred(s) {const active=s.decks.filter(d=>!d.archived);const upcoming=active.filter(d=>d.due&&d.due>=day()).sort((a,b)=>a.due.localeCompare(b.due));return active.find(d=>d.id===s.active)||upcoming[0]||active[0];}
-  return {MODES,LABELS,uid,norm,day,band,key,clone,capital,shuffle,cleanDeck,parseLines,initial,stat,mastered,summary,install,exportDeck,decode,validateState,markSeen,applyAnswer,entry,spend,next,question,check,preferred,studyDecks};
+  return {STICKERS,stickerProgress,unlockStickers,photoWords,MODES,LABELS,uid,norm,day,band,key,clone,capital,shuffle,cleanDeck,parseLines,initial,stat,mastered,summary,install,exportDeck,decode,validateState,markSeen,applyAnswer,entry,spend,next,question,check,preferred,studyDecks};
 });
