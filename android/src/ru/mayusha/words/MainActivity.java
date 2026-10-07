@@ -35,6 +35,7 @@ public final class MainActivity extends Activity {
  private static final String HOST="words.mayusha.local";
  private static final int MAX_FILE=5*1024*1024, OPEN_FILE=10, SAVE_BACKUP=11, SCAN_PHOTO=12;
  private WebView web;
+ private volatile boolean answerMode;
  private com.google.mlkit.nl.translate.Translator translator;
  private int translationGeneration=0;
  private String photoRequest="";
@@ -49,7 +50,13 @@ public final class MainActivity extends Activity {
 
  @Override public void onCreate(Bundle saved) {
   super.onCreate(saved);prefs=getSharedPreferences("parent",MODE_PRIVATE);stateFile=new AtomicFile(new File(getFilesDir(),"words-state.json"));
-  FrameLayout frame=new FrameLayout(this);frame.setBackgroundColor(Color.rgb(247,243,252));web=new WebView(this);web.setBackgroundColor(Color.rgb(247,243,252));
+  FrameLayout frame=new FrameLayout(this);frame.setBackgroundColor(Color.rgb(247,243,252));web=new WebView(this){
+   @Override public android.view.inputmethod.InputConnection onCreateInputConnection(android.view.inputmethod.EditorInfo info){
+    android.view.inputmethod.InputConnection connection=super.onCreateInputConnection(info);
+    if(answerMode)AnswerKeyboard.configure(info);
+    return connection;
+   }
+  };web.setBackgroundColor(Color.rgb(247,243,252));
   frame.addView(web,new FrameLayout.LayoutParams(-1,-1));setContentView(frame);
   frame.setOnApplyWindowInsetsListener((v,insets)->{
    if(android.os.Build.VERSION.SDK_INT>=30){android.graphics.Insets i=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout()|WindowInsets.Type.ime());v.setPadding(i.left,i.top,i.right,i.bottom);}
@@ -130,6 +137,10 @@ public final class MainActivity extends Activity {
   translator.translate(word).addOnSuccessListener(value->{if(generation!=translationGeneration)return;js("window.WordsApp.onTranslation("+JSONObject.quote(request)+","+index+","+JSONObject.quote(word)+","+JSONObject.quote(value)+",false)");translateNext(request,words,index+1,generation);}).addOnFailureListener(e->{if(generation==translationGeneration){js("window.WordsApp.onTranslation("+JSONObject.quote(request)+",-1,\"\",\"Не удалось перевести слова. Можно повторить или вписать перевод вручную.\",true)");}});
  }
  public final class Bridge {
+  @JavascriptInterface public void setAnswerMode(boolean enabled){
+   if(answerMode==enabled)return;answerMode=enabled;
+   runOnUiThread(()->{if(web!=null)((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).restartInput(web);});
+  }
   @JavascriptInterface public void translatePhoto(String request,String json){
    if(request==null||!request.matches("[0-9]{1,12}")||json==null||json.length()>10000)return;
    try{org.json.JSONArray words=new org.json.JSONArray(json);if(words.length()>100)return;for(int i=0;i<words.length();i++)if(!words.getString(i).matches("[a-zA-Z '\u2019-]{1,60}"))return;

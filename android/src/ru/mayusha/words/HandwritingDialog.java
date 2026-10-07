@@ -123,10 +123,12 @@ final class HandwritingDialog extends Dialog {
   RecognitionContext context=HandwritingContext.forAnswer(pad.getWidth(),pad.getHeight());
   recognizer.recognize(ink.build(),context).addOnSuccessListener(result->{
    if(closed)return;busy=false;recognize.setEnabled(true);if(requested!=revision){refresh();return;}
-   ArrayList<String> seen=new ArrayList<>();
-   for(RecognitionCandidate candidate:result.getCandidates()){
-    final String value=candidate.getText().trim();if(value.isEmpty()||value.length()>80||seen.contains(value)||singleLetter&&value.length()!=1)continue;seen.add(value);
-    add(candidates,button(value+"  →",false,v->{if(requested!=revision||closed)return;listener.onText(value);dismiss();}));if(seen.size()>=3)break;
+   ArrayList<String> raw=new ArrayList<>();
+   for(RecognitionCandidate candidate:result.getCandidates())raw.add(candidate.getText().trim());
+   List<String> seen=singleLetter?HandwritingLetters.variants(raw):new ArrayList<>();
+   if(!singleLetter)for(String value:raw){if(value.isEmpty()||value.length()>80||seen.contains(value))continue;seen.add(value);if(seen.size()>=3)break;}
+   for(final String value:seen){
+    add(candidates,button((singleLetter?HandwritingLetters.label(value):value)+"  →",false,v->{if(requested!=revision||closed)return;listener.onText(value);dismiss();}));
    }
    status.setText(seen.isEmpty()?"Не удалось прочитать "+(singleLetter?"букву":"слово")+". Попробуй написать чуть крупнее и разборчивее.":"Выбери написанный вариант. Если он неверный — исправь штрихи или очисти поле.");
   }).addOnFailureListener(this::recognitionFailed);
