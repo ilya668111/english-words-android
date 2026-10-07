@@ -20,14 +20,14 @@ test('update preserves unchanged progress and resets edited translations only',(
  const s=E.initial(),d=s.decks[0];E.applyAnswer(s,E.question(s,d,d.words[0],'write'),true);E.applyAnswer(s,E.question(s,d,d.words[1],'write'),true);
  const changed=E.clone(d);changed.words[0].ru=['медленно'];E.install(s,changed);assert.equal(E.stat(s,d,d.words[0]).s.ok,0);assert.equal(E.stat(s,d,d.words[1]).s.ok,1);assert.equal(s.decks.length,1);
 });
-test('reward requires 10 distinct independent word credits and cannot be farmed',()=>{
+test('reward accumulates correct answers including repeated words',()=>{
  const s=E.initial(),d=s.decks[0],now=new Date('2026-09-08T12:00:00').getTime();
  for(let i=0;i<10;i++)E.applyAnswer(s,E.question(s,d,d.words[i],'enru'),true,false,now);
  assert.equal(s.wallet.balance,5);assert.equal(s.wallet.counts[0],0);
  for(let i=0;i<10;i++)E.applyAnswer(s,E.question(s,d,d.words[i],'ruen'),true,false,now);
- assert.equal(s.wallet.balance,5);assert.equal(s.wallet.counts[0],0);
+ assert.equal(s.wallet.balance,10);assert.equal(s.wallet.counts[0],0);
  for(let i=0;i<10;i++)E.applyAnswer(s,E.question(s,d,d.words[i],'enru'),true,false,now+86400000);
- assert.equal(s.wallet.balance,10);
+ assert.equal(s.wallet.balance,15);
 });
 test('hinted answers and errors earn nothing; scaffolding does not establish writing mastery',()=>{
  const s=E.initial(),d=s.decks[0];for(const mode of E.MODES){E.applyAnswer(s,E.question(s,d,d.words[0],mode),true,true);E.applyAnswer(s,E.question(s,d,d.words[1],mode),false);}
@@ -82,3 +82,14 @@ test('chosen pack wins over nearest date, and all-active cannot include an all-a
  s.decks.forEach(d=>d.archived=true);assert.throws(()=>E.next(s,'__all__'),/выбери набор/);
 });
 console.log(`${count} engine tests passed`);
+
+test('nine correct answers survive errors, backup and repeated lessons',()=>{
+ let s=E.initial();const d=s.decks[0],q=E.question(s,d,d.words[0],'write');
+ for(let i=0;i<9;i++)E.applyAnswer(s,q,true,false);
+ E.applyAnswer(s,q,false,false);assert.equal(s.wallet.counts[2],9);
+ s=E.validateState(JSON.parse(JSON.stringify(s)));
+ E.applyAnswer(s,q,true,true);assert.equal(s.wallet.counts[2],9);
+ E.applyAnswer(s,q,true,false);assert.equal(s.wallet.balance,10);assert.equal(s.wallet.counts[2],0);
+ for(let i=0;i<8;i++)E.applyAnswer(s,q,true,false);
+ E.applyAnswer(s,q,false,false);assert.equal(s.wallet.counts[2],8);
+});

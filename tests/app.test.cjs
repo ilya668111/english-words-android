@@ -8,7 +8,7 @@ async function fixture(initial=null){
  const dom=new JSDOM(fs.readFileSync(assets+'/index.html','utf8'),{url:'https://words.mayusha.local/',runScripts:'outside-only',pretendToBeVisual:true});
  const w=dom.window;w.scrollTo=()=>{};w.HTMLElement.prototype.scrollIntoView=()=>{};
  const native={saved:initial?JSON.stringify(initial):'',pin:'',exports:[],shares:[],spoken:[],handwriting:[],fail:false,saveCalls:0};
- w.WordsAndroid={translatePhoto:(...args)=>native.translation=args,scanPhoto:r=>native.photo=r,openHandwriting:(...a)=>native.handwriting.push(a),loadState:()=>native.saved,saveState:text=>{native.saveCalls++;if(native.fail)return false;native.saved=text;return true;},hasPin:()=>!!native.pin,setPin:p=>{native.pin=p;return true;},verifyPin:p=>p===native.pin?'ok':'Неверный PIN. Попробуйте ещё раз.',lockParent:()=>{},ready:()=>{},checkVoice:()=>{},speak:(...a)=>native.spoken.push(a),stopSpeech:()=>{},openSpeechSettings:()=>{},pickFile:()=>{},exportFile:(...a)=>native.exports.push(a),shareText:t=>native.shares.push(t)};
+ w.WordsAndroid={setAnswerMode:enabled=>native.answerMode=enabled,translatePhoto:(...args)=>native.translation=args,scanPhoto:r=>native.photo=r,openHandwriting:(...a)=>native.handwriting.push(a),loadState:()=>native.saved,saveState:text=>{native.saveCalls++;if(native.fail)return false;native.saved=text;return true;},hasPin:()=>!!native.pin,setPin:p=>{native.pin=p;return true;},verifyPin:p=>p===native.pin?'ok':'Неверный PIN. Попробуйте ещё раз.',lockParent:()=>{},ready:()=>{},checkVoice:()=>{},speak:(...a)=>native.spoken.push(a),stopSpeech:()=>{},openSpeechSettings:()=>{},pickFile:()=>{},exportFile:(...a)=>native.exports.push(a),shareText:t=>native.shares.push(t)};
  w.eval(fs.readFileSync(assets+'/engine.js','utf8'));w.eval(fs.readFileSync(assets+'/app.js','utf8'));
  const tick=()=>new Promise(r=>setTimeout(r,0));
  async function click(selector){const e=w.document.querySelector(selector);assert(e,'Missing '+selector+' on '+w.document.body.textContent.slice(0,200));assert(!e.disabled,'Disabled '+selector);e.click();await tick();}
@@ -23,6 +23,7 @@ async function fixture(initial=null){
 async function test(name,fn){const f=await fixture();try{await fn(f);tests++;console.log('PASS',name);}finally{f.dom.window.close();}}
 const pairs=Object.fromEntries(E.initial().decks[0].words.map(w=>[w.en,w.ru[0]]));
 async function solve(f,good=true){
+ assert.equal(f.native.answerMode,!!f.w.document.querySelector('#answer'));
  const prompt=f.w.document.querySelector('.study-card .word').textContent;
  const choices=[...f.w.document.querySelectorAll('.choice')];
  if(choices.length){const answer=pairs[prompt]||Object.keys(pairs).find(k=>pairs[k]===prompt);const b=choices.find(b=>(b.textContent===answer)===good);assert(b,'No answer '+prompt);await f.click(`[data-action="choice"][data-id="${b.dataset.id}"]`);return;}
