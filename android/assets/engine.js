@@ -113,12 +113,12 @@
   }
   function markSeen(s,d,w) {const p=stat(s,d,w);p.seen=true;s.progress[key(d,w)]=p;}
   function reward(s,w,mode,now) {
-    const b=band(mode),today=day(now),credit=norm(w.en)+'|'+b;
-    if(s.credits[credit]===today)return {minutes:0,reason:'repeat'};
+    const b=band(mode),today=day(now);
+    
     const available=Math.max(0,s.settings.dailyCap-(s.wallet.daily[today]||0));
     if(!available)return {minutes:0,reason:'cap'};
     if(s.settings.rewards[b]===0)return {minutes:0,reason:'disabled'};
-    s.credits[credit]=today;s.wallet.counts[b]++;
+    s.wallet.counts[b]++;
     if(s.wallet.counts[b]<10)return {minutes:0,reason:'counted'};
     s.wallet.counts[b]=0;const minutes=Math.min(s.settings.rewards[b],available);
     s.wallet.daily[today]=(s.wallet.daily[today]||0)+minutes;
